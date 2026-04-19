@@ -37,9 +37,20 @@ app.add_middleware(SlowAPIMiddleware)
 
 _allowed_origins = [o.strip() for o in settings.allowed_origins.split(",") if o.strip()]
 
+import re as _re
+
+def _is_allowed_origin(origin: str) -> bool:
+    if origin in _allowed_origins:
+        return True
+    # Allow any Vercel preview/production deployment
+    if _re.match(r"https://[a-z0-9-]+(\.vercel\.app)$", origin):
+        return True
+    return False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://[a-z0-9\-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
