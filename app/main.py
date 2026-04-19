@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app import models
-from app.routers import admin, auth, commerce, contact, courses, instructor, interview, student
+from app.routers import admin, auth, commerce, contact, courses, instructor, interview, learn, student
 from app.services.bootstrap import seed_if_empty
 from app.utils.config import get_settings
 from app.utils.database import Base, SessionLocal, engine
@@ -64,6 +64,7 @@ app.include_router(commerce.router)
 app.include_router(admin.router)
 app.include_router(student.router)
 app.include_router(instructor.router)
+app.include_router(learn.router)
 
 
 @app.get("/")
