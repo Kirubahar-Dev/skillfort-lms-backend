@@ -50,13 +50,14 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
     db.commit()
     mailer = MailService()
     result = {"status": "skipped", "reason": "mail disabled"}
+    subject = "Welcome to Skillfort Institute 🎓"
     try:
         result = __import__("asyncio").run(
-            mailer.send(payload.email, "Welcome to Skillfort LMS", "<p>Your account was created successfully.</p>")
+            mailer.send_welcome(payload.email, payload.full_name)
         )
     except Exception:
         pass
-    db.add(EmailLog(recipient=payload.email, subject="Welcome to Skillfort LMS", status=result.get("status", "unknown"), error=result.get("reason")))
+    db.add(EmailLog(recipient=payload.email, subject=subject, status=result.get("status", "unknown"), error=result.get("reason")))
     db.commit()
     return {"message": "Registration successful. Verification email queued."}
 
@@ -106,7 +107,7 @@ def forgot_password(request: Request, email: str, db: Session = Depends(get_db))
     result = {"status": "skipped", "reason": "mail disabled"}
     try:
         result = __import__("asyncio").run(
-            mailer.send(email, "Reset your Skillfort password", f"<p>Reset link: <a href='{reset_link}'>{reset_link}</a></p>")
+            mailer.send_password_reset(email, reset_link)
         )
     except Exception:
         pass

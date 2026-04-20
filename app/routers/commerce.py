@@ -83,9 +83,12 @@ async def confirm_order(payload: ConfirmOrderRequest, db: Session = Depends(get_
     db.add(cert)
 
     mailer = MailService()
-    subject = "Order confirmed - Skillfort Institute"
-    body = f"<p>Your payment is successful for order <b>{order.order_id}</b>.</p><p>Course: {course.title if course else order.course_id}</p>"
-    mail_result = await mailer.send(user.email, subject, body)
+    subject = f"Enrolled: {course.title if course else 'Course'} ✅"
+    mail_result = await mailer.send_enrollment_confirmation(
+        user.email, user.full_name,
+        course.title if course else "Skillfort Course",
+        order.order_id
+    )
     db.add(EmailLog(recipient=user.email, subject=subject, status=mail_result.get("status", "unknown"), error=mail_result.get("reason")))
 
     db.commit()
