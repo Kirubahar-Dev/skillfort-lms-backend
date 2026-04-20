@@ -10,3 +10,4 @@ storage/
 *.log
 .DS_Store
 restore_thumbnails.py
+.env.production
