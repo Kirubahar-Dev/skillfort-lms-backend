@@ -2,7 +2,7 @@ import io
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -125,6 +125,43 @@ def update_lesson_video(lesson_id: int, video_url: str, db: Session = Depends(ge
     lesson.video_url = video_url
     db.commit()
     return {"lesson_id": lesson_id, "video_url": video_url}
+
+
+# ── Admin: upload video file for a lesson ────────────────────────────────────
+@router.post("/admin/lessons/{lesson_id}/upload-video")
+async def upload_lesson_video(
+    lesson_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user)
+):
+    if user.role not in ("admin", "instructor"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+
+    # Validate file type
+    allowed = {"video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo"}
+    content_type = file.content_type or "video/mp4"
+    if content_type not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported video type: {content_type}. Use mp4, webm, ogg, mov, or avi.")
+
+    # 500MB limit
+    MAX_SIZE = 500 * 1024 * 1024
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Max 500MB.")
+
+    try:
+        from app.services.storage_service import upload_video
+        url = upload_video(file_bytes, file.filename or "video.mp4", content_type)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    lesson.video_url = url
+    db.commit()
+    return {"lesson_id": lesson_id, "video_url": url, "filename": file.filename}
 
 
 # ── Admin: get all students progress for a course ─────────────────────────────

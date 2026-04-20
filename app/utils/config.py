@@ -38,6 +38,10 @@ class Settings(BaseModel):
 
     file_storage_dir: str = os.getenv("FILE_STORAGE_DIR", "./storage")
 
+    supabase_url: str = os.getenv("SUPABASE_URL", "")
+    supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
+    supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "course-videos")
+
 
 @lru_cache
 def get_settings() -> Settings:
