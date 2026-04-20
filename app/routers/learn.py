@@ -195,13 +195,13 @@ def get_certificate_info(course_id: int, db: Session = Depends(get_db), user: Us
         raise HTTPException(status_code=404, detail="Not enrolled")
 
     course = db.query(Course).filter(Course.id == course_id).first()
-    cert = db.query(Certificate).filter(
-        Certificate.user_id == user.id,
-        Certificate.course_id == course_id
-    ).first()
+    eligible = enroll.progress_percent >= 100
+    cert = None
+    if eligible:
+        cert = _ensure_certificate(db, user, course_id)
 
     return {
-        "eligible": enroll.progress_percent >= 100,
+        "eligible": eligible,
         "progress_percent": enroll.progress_percent,
         "course_title": course.title if course else "",
         "course_category": course.category if course else "",
