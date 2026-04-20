@@ -41,7 +41,7 @@ def login(request: Request, payload: LoginRequest, response: Response, db: Sessi
 
 @router.post("/register")
 @limiter.limit("5/minute")
-def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
+async def register(request: Request, payload: RegisterRequest, db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=409, detail="Email already registered")
 
@@ -52,9 +52,7 @@ def register(request: Request, payload: RegisterRequest, db: Session = Depends(g
     result = {"status": "skipped", "reason": "mail disabled"}
     subject = "Welcome to Skillfort Institute 🎓"
     try:
-        result = __import__("asyncio").run(
-            mailer.send_welcome(payload.email, payload.full_name)
-        )
+        result = await mailer.send_welcome(payload.email, payload.full_name)
     except Exception:
         pass
     db.add(EmailLog(recipient=payload.email, subject=subject, status=result.get("status", "unknown"), error=result.get("reason")))
@@ -92,7 +90,7 @@ def refresh_token(
 
 @router.post("/forgot-password")
 @limiter.limit("3/minute")
-def forgot_password(request: Request, email: str, db: Session = Depends(get_db)):
+async def forgot_password(request: Request, email: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     if not user:
         return {"message": "If your email exists, a reset link has been sent."}
@@ -106,9 +104,7 @@ def forgot_password(request: Request, email: str, db: Session = Depends(get_db))
     mailer = MailService()
     result = {"status": "skipped", "reason": "mail disabled"}
     try:
-        result = __import__("asyncio").run(
-            mailer.send_password_reset(email, reset_link)
-        )
+        result = await mailer.send_password_reset(email, reset_link)
     except Exception:
         pass
     db.add(EmailLog(recipient=email, subject="Reset your Skillfort password", status=result.get("status", "unknown"), error=result.get("reason")))
