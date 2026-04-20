@@ -35,6 +35,7 @@ class Settings(BaseModel):
     smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
     smtp_user: str = os.getenv("SMTP_USER", "")
     smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    brevo_api_key: str = os.getenv("BREVO_API_KEY", "")
 
     file_storage_dir: str = os.getenv("FILE_STORAGE_DIR", "./storage")
 
