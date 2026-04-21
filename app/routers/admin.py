@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from urllib.parse import urlparse
@@ -429,3 +429,44 @@ def upsert_setting(key: str, value: str, db: Session = Depends(get_db), _=Depend
         db.add(row)
     db.commit()
     return {"message": "saved"}
+
+
+@router.post("/upload-thumbnail")
+async def upload_thumbnail(
+    file: UploadFile = File(...),
+    _=Depends(require_role("admin")),
+):
+    """Upload a course thumbnail image; returns its public URL."""
+    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"}
+    ct = file.content_type or "image/jpeg"
+    if ct not in allowed:
+        raise HTTPException(400, f"Unsupported type {ct}. Use jpg, png, webp or svg.")
+    MAX = 5 * 1024 * 1024  # 5 MB
+    data = await file.read()
+    if len(data) > MAX:
+        raise HTTPException(413, "Image too large. Max 5 MB.")
+    import uuid, os
+    from app.services.storage_service import upload_video  # reuse generic uploader
+    from app.utils.config import get_settings
+    settings = get_settings()
+    ext = (file.filename or "thumb.jpg").rsplit(".", 1)[-1]
+    fname = f"thumbnails/{uuid.uuid4().hex}.{ext}"
+    if settings.supabase_url and settings.supabase_service_key:
+        try:
+            from supabase import create_client
+            client = create_client(settings.supabase_url, settings.supabase_service_key)
+            bucket = settings.supabase_storage_bucket
+            client.storage.from_(bucket).upload(fname, data,
+                file_options={"content-type": ct, "upsert": "true"})
+            url = client.storage.from_(bucket).get_public_url(fname)
+            return {"url": url}
+        except Exception as e:
+            raise HTTPException(500, f"Upload failed: {e}")
+    else:
+        # Local fallback — save under static/thumbnails
+        storage_dir = os.path.join(settings.file_storage_dir, "thumbnails")
+        os.makedirs(storage_dir, exist_ok=True)
+        path = os.path.join(storage_dir, f"{uuid.uuid4().hex}.{ext}")
+        with open(path, "wb") as f:
+            f.write(data)
+        return {"url": f"/storage/thumbnails/{os.path.basename(path)}"}
