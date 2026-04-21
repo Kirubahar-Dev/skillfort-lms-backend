@@ -43,6 +43,8 @@ class Settings(BaseModel):
     supabase_service_key: str = os.getenv("SUPABASE_SERVICE_KEY", "")
     supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "course-videos")
 
+    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+
 
 @lru_cache
 def get_settings() -> Settings:

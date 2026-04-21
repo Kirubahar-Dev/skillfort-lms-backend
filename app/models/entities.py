@@ -421,3 +421,35 @@ class PasswordResetToken(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LessonQuestion(Base):
+    """MCQ questions for a lesson — AI-generated or manually added."""
+    __tablename__ = "lesson_questions"
+
+    id = Column(Integer, primary_key=True)
+    lesson_id = Column(Integer, ForeignKey("course_lessons.id"), nullable=False, index=True)
+    question = Column(Text, nullable=False)
+    option_a = Column(String(500), nullable=False)
+    option_b = Column(String(500), nullable=False)
+    option_c = Column(String(500), nullable=False)
+    option_d = Column(String(500), nullable=False)
+    correct_option = Column(String(1), nullable=False)   # "A" | "B" | "C" | "D"
+    explanation = Column(Text, nullable=True)
+    status = Column(String(20), default="pending")       # pending | approved | rejected
+    source = Column(String(20), default="ai")            # ai | manual
+    order_index = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LessonQuizAttempt(Base):
+    """Records each time a student submits a lesson quiz."""
+    __tablename__ = "lesson_quiz_attempts"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    lesson_id = Column(Integer, ForeignKey("course_lessons.id"), nullable=False, index=True)
+    score = Column(Integer, nullable=False)   # number correct
+    total = Column(Integer, nullable=False)   # total questions asked
+    passed = Column(Boolean, nullable=False)  # score/total >= 0.7
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
