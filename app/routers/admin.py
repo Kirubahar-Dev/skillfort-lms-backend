@@ -470,3 +470,25 @@ async def upload_thumbnail(
         with open(path, "wb") as f:
             f.write(data)
         return {"url": f"/storage/thumbnails/{os.path.basename(path)}"}
+
+
+@router.post("/upload-video")
+async def upload_video_generic(
+    file: UploadFile = File(...),
+    _=Depends(require_role("admin")),
+):
+    """Upload a video file (not tied to a lesson yet). Returns public URL to use in lesson form."""
+    allowed = {"video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo"}
+    ct = file.content_type or "video/mp4"
+    if ct not in allowed:
+        raise HTTPException(400, f"Unsupported type. Use mp4, webm, mov, avi.")
+    MAX = 500 * 1024 * 1024  # 500 MB
+    data = await file.read()
+    if len(data) > MAX:
+        raise HTTPException(413, "File too large. Max 500 MB.")
+    try:
+        from app.services.storage_service import upload_video
+        url = upload_video(data, file.filename or "video.mp4", ct)
+        return {"url": url}
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
