@@ -44,6 +44,7 @@ class Settings(BaseModel):
     supabase_storage_bucket: str = os.getenv("SUPABASE_STORAGE_BUCKET", "course-videos")
 
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
 
 
 @lru_cache

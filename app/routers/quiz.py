@@ -72,10 +72,7 @@ def _q_to_dict(q: LessonQuestion) -> dict:
     }
 
 
-async def _generate_via_anthropic(
-    course_title: str, section_title: str, lesson_title: str, api_key: str
-) -> list[dict]:
-    prompt = f"""You are an expert educational content creator. Generate exactly 4 multiple-choice quiz questions to test student understanding of this lesson.
+QUIZ_PROMPT = """You are an expert educational content creator. Generate exactly 4 multiple-choice quiz questions to test student understanding of this lesson.
 
 Course: {course_title}
 Section: {section_title}
@@ -91,6 +88,46 @@ Requirements:
 Return ONLY a valid JSON array with NO markdown, NO commentary, just the raw JSON:
 [{{"question":"...","option_a":"...","option_b":"...","option_c":"...","option_d":"...","correct_option":"A","explanation":"..."}}]"""
 
+
+def _extract_json(text: str) -> list[dict]:
+    match = re.search(r"\[.*\]", text, re.DOTALL)
+    if not match:
+        raise RuntimeError("AI did not return a valid JSON array")
+    data = json.loads(match.group())
+    if not isinstance(data, list) or len(data) == 0:
+        raise RuntimeError("AI returned empty question list")
+    return data
+
+
+async def _generate_via_groq(
+    course_title: str, section_title: str, lesson_title: str, api_key: str
+) -> list[dict]:
+    prompt = QUIZ_PROMPT.format(
+        course_title=course_title, section_title=section_title, lesson_title=lesson_title
+    )
+    async with httpx.AsyncClient(timeout=40) as client:
+        r = await client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": "llama-3.1-8b-instant",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 2048,
+                "temperature": 0.7,
+            },
+        )
+    if r.status_code != 200:
+        raise RuntimeError(f"Groq API error {r.status_code}: {r.text[:300]}")
+    text = r.json()["choices"][0]["message"]["content"]
+    return _extract_json(text)
+
+
+async def _generate_via_anthropic(
+    course_title: str, section_title: str, lesson_title: str, api_key: str
+) -> list[dict]:
+    prompt = QUIZ_PROMPT.format(
+        course_title=course_title, section_title=section_title, lesson_title=lesson_title
+    )
     async with httpx.AsyncClient(timeout=40) as client:
         r = await client.post(
             "https://api.anthropic.com/v1/messages",
@@ -105,20 +142,10 @@ Return ONLY a valid JSON array with NO markdown, NO commentary, just the raw JSO
                 "messages": [{"role": "user", "content": prompt}],
             },
         )
-
     if r.status_code != 200:
         raise RuntimeError(f"Anthropic API error {r.status_code}: {r.text[:300]}")
-
     text = r.json()["content"][0]["text"]
-    # Extract JSON array even if wrapped in backticks
-    match = re.search(r"\[.*\]", text, re.DOTALL)
-    if not match:
-        raise RuntimeError("AI did not return a valid JSON array")
-
-    data = json.loads(match.group())
-    if not isinstance(data, list) or len(data) == 0:
-        raise RuntimeError("AI returned empty question list")
-    return data
+    return _extract_json(text)
 
 
 def _mark_lesson_complete(db: Session, user: User, lesson: CourseLesson):
@@ -334,10 +361,11 @@ async def admin_generate_questions(
     _require_staff(user)
     settings = get_settings()
 
-    if not settings.anthropic_api_key:
+    if not settings.groq_api_key and not settings.anthropic_api_key:
         raise HTTPException(
             400,
-            "ANTHROPIC_API_KEY not configured. Add it to your environment variables.",
+            "No AI key configured. Add GROQ_API_KEY (free at groq.com) "
+            "or ANTHROPIC_API_KEY to your environment variables.",
         )
 
     lesson = db.query(CourseLesson).filter(CourseLesson.id == lesson_id).first()
@@ -348,10 +376,17 @@ async def admin_generate_questions(
     course_title = course.title if course else "Course"
 
     try:
-        generated = await _generate_via_anthropic(
-            course_title, lesson.section_title, lesson.lesson_title,
-            settings.anthropic_api_key,
-        )
+        # Prefer Groq (free); fall back to Anthropic
+        if settings.groq_api_key:
+            generated = await _generate_via_groq(
+                course_title, lesson.section_title, lesson.lesson_title,
+                settings.groq_api_key,
+            )
+        else:
+            generated = await _generate_via_anthropic(
+                course_title, lesson.section_title, lesson.lesson_title,
+                settings.anthropic_api_key,
+            )
     except Exception as e:
         raise HTTPException(500, f"AI generation failed: {e}")
 
